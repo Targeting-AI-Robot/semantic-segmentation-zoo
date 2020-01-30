@@ -34,7 +34,7 @@ parser.add_argument('--checkpoint_step', type=int, default=5, help='How often to
 parser.add_argument('--validation_step', type=int, default=1, help='How often to perform validation (epochs)')
 parser.add_argument('--image', type=str, default=None, help='The image you want to predict on. Only valid in "predict" mode.')
 parser.add_argument('--continue_training', type=str2bool, default=False, help='Whether to continue training from a checkpoint')
-parser.add_argument('--dataset', type=str, default="CamVid", help='Dataset you are using.')
+parser.add_argument('--dataset', type=str, default="CamVid_people", help='Dataset you are using.')
 parser.add_argument('--crop_height', type=int, default=512, help='Height of cropped input image to network')
 parser.add_argument('--crop_width', type=int, default=512, help='Width of cropped input image to network')
 parser.add_argument('--batch_size', type=int, default=1, help='Number of images in each batch')
@@ -43,15 +43,23 @@ parser.add_argument('--h_flip', type=str2bool, default=False, help='Whether to r
 parser.add_argument('--v_flip', type=str2bool, default=False, help='Whether to randomly flip the image vertically for data augmentation')
 parser.add_argument('--brightness', type=float, default=None, help='Whether to randomly change the image brightness for data augmentation. Specifies the max bightness change as a factor between 0.0 and 1.0. For example, 0.1 represents a max brightness change of 10%% (+-).')
 parser.add_argument('--rotation', type=float, default=None, help='Whether to randomly rotate the image for data augmentation. Specifies the max rotation angle in degrees.')
-parser.add_argument('--model', type=str, default="FC-DenseNet56", help='The model you are using. See model_builder.py for supported models')
+parser.add_argument('--model', type=str, default="DeepLabV3_plus", help='The model you are using. See model_builder.py for supported models')
 parser.add_argument('--frontend', type=str, default="ResNet101", help='The frontend you are using. See frontend_builder.py for supported models')
 parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')
+parser.add_argument('--weight', type=int, help='set weight for loss.')
+
 
 args = parser.parse_args()
 
 if args.gpu:
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
+def calc_weight(output_image, weight):
+    det = np.sum(output_image, axis=-1)
+    loss_weight = np.ones(det.shape)
+    loss_weight[det==765] = weight
+    return loss_weight
+    
 def data_augmentation(input_image, output_image):
     # Data augmentation
     input_image, output_image = utils.random_crop(input_image, output_image, args.crop_height, args.crop_width)
@@ -95,10 +103,13 @@ sess=tf.Session(config=config)
 # Compute your softmax cross entropy loss
 net_input = tf.placeholder(tf.float32,shape=[None,args.crop_height,args.crop_width,3])
 net_output = tf.placeholder(tf.float32,shape=[None,None,None,num_classes])
+net_weight = tf.placeholder(tf.float32,shape=[None,None,None])
 
 network, init_fn = model_builder.build_model(model_name=args.model, frontend=args.frontend, net_input=net_input, num_classes=num_classes, crop_width=args.crop_width, crop_height=args.crop_height, is_training=True)
 
-loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=network, labels=net_output))
+softmax = tf.nn.softmax_cross_entropy_with_logits(logits=network, labels=net_output)
+
+loss = tf.reduce_mean(tf.multiply(softmax , net_weight))
 
 opt = tf.train.RMSPropOptimizer(learning_rate=0.0001, decay=0.995).minimize(loss, var_list=[var for var in tf.trainable_variables()])
 
@@ -171,6 +182,8 @@ for epoch in range(args.epoch_start_i, args.num_epochs):
 
         input_image_batch = []
         output_image_batch = []
+        loss_weight_batch = []
+
 
         # Collect a batch of images
         for j in range(args.batch_size):
@@ -179,9 +192,12 @@ for epoch in range(args.epoch_start_i, args.num_epochs):
             input_image = utils.load_image(train_input_names[id])
             output_image = utils.load_image(train_output_names[id])
 
+
+
             with tf.device('/cpu:0'):
                 input_image, output_image = data_augmentation(input_image, output_image)
-
+                loss_weight = calc_weight(output_image, args.weight)
+                
 
                 # Prep the data. Make sure the labels are in one-hot format
                 input_image = np.float32(input_image) / 255.0
@@ -189,16 +205,22 @@ for epoch in range(args.epoch_start_i, args.num_epochs):
 
                 input_image_batch.append(np.expand_dims(input_image, axis=0))
                 output_image_batch.append(np.expand_dims(output_image, axis=0))
+                loss_weight_batch.append(np.expand_dims(loss_weight, axis=0))
+
 
         if args.batch_size == 1:
             input_image_batch = input_image_batch[0]
             output_image_batch = output_image_batch[0]
+            loss_weight_batch = loss_weight_batch[0]
+
         else:
             input_image_batch = np.squeeze(np.stack(input_image_batch, axis=1))
             output_image_batch = np.squeeze(np.stack(output_image_batch, axis=1))
+            loss_weight_batch = np.squeeze(np.stack(loss_weight_batch, axis=1))
 
+        
         # Do the training
-        _,current=sess.run([opt,loss],feed_dict={net_input:input_image_batch,net_output:output_image_batch})
+        _,current=sess.run([opt,loss],feed_dict={net_input:input_image_batch,net_output:output_image_batch, net_weight:loss_weight_batch})
         current_losses.append(current)
         cnt = cnt + args.batch_size
         if cnt % 20 == 0:
