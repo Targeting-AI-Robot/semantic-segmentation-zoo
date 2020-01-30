@@ -45,8 +45,12 @@ parser.add_argument('--brightness', type=float, default=None, help='Whether to r
 parser.add_argument('--rotation', type=float, default=None, help='Whether to randomly rotate the image for data augmentation. Specifies the max rotation angle in degrees.')
 parser.add_argument('--model', type=str, default="FC-DenseNet56", help='The model you are using. See model_builder.py for supported models')
 parser.add_argument('--frontend', type=str, default="ResNet101", help='The frontend you are using. See frontend_builder.py for supported models')
+parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')
+
 args = parser.parse_args()
 
+if args.gpu:
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
 
 def data_augmentation(input_image, output_image):
     # Data augmentation
