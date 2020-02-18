@@ -143,6 +143,7 @@ print("Crop Width -->", args.crop_width)
 print("Num Epochs -->", args.num_epochs)
 print("Batch Size -->", args.batch_size)
 print("Num Classes -->", num_classes)
+print("weight -->", args.weight)
 
 print("Data Augmentation:")
 print("\tVertical Flip -->", args.v_flip)
