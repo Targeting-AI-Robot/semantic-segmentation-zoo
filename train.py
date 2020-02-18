@@ -46,7 +46,7 @@ parser.add_argument('--rotation', type=float, default=None, help='Whether to ran
 parser.add_argument('--model', type=str, default="DeepLabV3_plus", help='The model you are using. See model_builder.py for supported models')
 parser.add_argument('--frontend', type=str, default="ResNet101", help='The frontend you are using. See frontend_builder.py for supported models')
 parser.add_argument('--gpu', help='comma separated list of GPU(s) to use.')
-parser.add_argument('--weight', type=int, help='set weight for loss.')
+parser.add_argument('--weight', type=int, default=5, help='set weight for loss.')
 
 
 args = parser.parse_args()
@@ -111,7 +111,7 @@ softmax = tf.nn.softmax_cross_entropy_with_logits(logits=network, labels=net_out
 
 loss = tf.reduce_mean(tf.multiply(softmax , net_weight))
 
-opt = tf.train.RMSPropOptimizer(learning_rate=0.0001, decay=0.995).minimize(loss, var_list=[var for var in tf.trainable_variables()])
+opt = tf.train.RMSPropOptimizer(learning_rate=0.00003, decay=0.995).minimize(loss, var_list=[var for var in tf.trainable_variables()])
 
 saver=tf.train.Saver(max_to_keep=1000)
 sess.run(tf.global_variables_initializer())
