@@ -13,9 +13,9 @@ train_input_names,train_output_names, val_input_names, val_output_names, test_in
 print(train_output_names[0])
 
 people_images = []
-file_names = train_output_names
+#file_names = train_output_names
 #file_names = test_output_names
-#file_names = val_output_names
+file_names = val_output_names
 n = len(file_names)
 
 filter = np.zeros((720,960,3))
@@ -27,8 +27,10 @@ for k in range(n):
     print(k,"/",len(file_names))
     output_image = utils.load_image(file_names[k])
     det = np.sum(np.multiply(filter, output_image), axis=-1)
+    output_image[:,:] = np.array([0,0,0])
     output_image[det == 4210688] = np.array([255,255,255])
-    output_image[det != 4210688] = np.array([0,0,0])
+    output_image[det == 32960] = np.array([255,255,255])
+    output_image[det == 12615744] = np.array([255,255,255])
 
     filename = file_names[k].replace("CamVid","CamVid_people")
     print(filename)
